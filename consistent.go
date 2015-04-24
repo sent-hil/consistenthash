@@ -10,24 +10,21 @@ import (
 var ErrNodeNotFound = errors.New("node not found")
 
 type Ring struct {
-	Nodes          Nodes
-	sortedNodekeys uint32
+	Nodes Nodes
 	sync.Mutex
 }
 
 func NewRing() *Ring {
-	return &Ring{Nodes: []*Node{}}
+	return &Ring{Nodes: Nodes{}}
 }
 
 func (r *Ring) AddNode(id string) {
 	r.Lock()
 	defer r.Unlock()
 
-	node := &Node{
-		Id: id, HashId: hashId(id),
-	}
-
+	node := NewNode(id)
 	r.Nodes = append(r.Nodes, node)
+
 	sort.Sort(r.Nodes)
 }
 
@@ -35,10 +32,8 @@ func (r *Ring) RemoveNode(id string) error {
 	r.Lock()
 	defer r.Unlock()
 
-	h := hashId(id)
-	i := r.search(h, id)
-
-	if i > r.Nodes.Len() || r.Nodes[i].HashId != h {
+	i := r.search(id)
+	if i >= r.Nodes.Len() || r.Nodes[i].Id != id {
 		return ErrNodeNotFound
 	}
 
@@ -48,7 +43,7 @@ func (r *Ring) RemoveNode(id string) error {
 }
 
 func (r *Ring) Get(id string) string {
-	i := r.search(hashId(id), id)
+	i := r.search(id)
 	if i >= r.Nodes.Len() {
 		i = 0
 	}
@@ -56,8 +51,11 @@ func (r *Ring) Get(id string) string {
 	return r.Nodes[i].Id
 }
 
-func (r *Ring) search(h uint32, id string) int {
-	searchfn := func(i int) bool { return r.Nodes[i].HashId >= h }
+func (r *Ring) search(id string) int {
+	searchfn := func(i int) bool {
+		return r.Nodes[i].HashId >= hashId(id)
+	}
+
 	return sort.Search(r.Nodes.Len(), searchfn)
 }
 
@@ -68,6 +66,13 @@ func (r *Ring) search(h uint32, id string) int {
 type Node struct {
 	Id     string
 	HashId uint32
+}
+
+func NewNode(id string) *Node {
+	return &Node{
+		Id:     id,
+		HashId: hashId(id),
+	}
 }
 
 type Nodes []*Node
